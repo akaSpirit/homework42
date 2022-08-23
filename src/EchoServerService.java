@@ -1,16 +1,17 @@
 import java.io.*;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Scanner;
+import java.util.*;
 
 public class EchoServerService {
     private static String name;
 
-    public static void handle(Socket socket, HashMap<Socket, String> clients, List<Socket> clientSockets) {
-        name = String.format("user" + socket.getPort());
+    public static String getName() {
+        return name;
+    }
 
+    public static void handle(Socket socket, HashMap<Socket, String> clients, List<Socket> clientSockets) {
+//        name = String.format("user" + socket.getPort());
+        name = giveRandomName(clients, socket);
         try (Scanner reader = getReader(socket);
              PrintWriter writer = getWriter(socket);
              socket) {
@@ -117,6 +118,20 @@ public class EchoServerService {
                 }
             }
         }
+    }
+
+    public static String giveRandomName(Map<Socket, String> clients, Socket socket) {
+        List<UserNames> userNames = new ArrayList<>(List.of(UserNames.values()));
+        String str;
+        while (true) {
+            Collections.shuffle(userNames);
+            str = userNames.get(0).getName();
+            if (!clients.containsValue(str)) {
+                clients.put(socket, str.strip());
+                break;
+            }
+        }
+        return str;
     }
 
 }

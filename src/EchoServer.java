@@ -35,13 +35,13 @@ public class EchoServer {
     }
 
     public void checkConnection(Socket clientSocket) {
-        System.out.printf("Подключен клиент: %s%n", clientSocket.getPort());
+        System.out.printf("Подключен клиент: %s%n", EchoServerService.getName());
         pool.submit(() -> {
         try {
             clientSockets.add(clientSocket);
             EchoServerService.handle(clientSocket, clients, clientSockets);
         } catch (NoSuchElementException e) {
-            System.out.printf("Отключен клиент: %s%n", clientSocket.getPort());
+            System.out.printf("Отключен клиент: %s%n", EchoServerService.getName());
             clientSockets.remove(clientSocket);
             clients.remove(clientSocket);
             e.printStackTrace();
