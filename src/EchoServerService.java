@@ -1,64 +1,60 @@
 import java.io.*;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Scanner;
 
 public class EchoServerService {
-    private static HashMap<Socket, String> clients = new HashMap<>();
     private static String name;
 
-    public static void handle(Socket socket) {
-        name = String.format("user" + socket.getPort()).replaceAll(" ", "");
-        System.out.printf("Подключен клиент: %s%n", name);
-//        System.out.printf("Подключен клиент: %s%n", socket);
-
-//        if (socket.isClosed()) clients.remove(socket, name);
+    public static void handle(Socket socket, HashMap<Socket, String> clients, List<Socket> clientSockets) {
+        name = String.format("user" + socket.getPort());
 
         try (Scanner reader = getReader(socket);
              PrintWriter writer = getWriter(socket);
              socket) {
 
             clients.put(socket, name);
-            sendResponse("Привет, " + name, writer);  //socket
+            sendResponse("Привет, " + name, writer);
 
             while (true) {
                 String message = reader.nextLine().strip();
                 if (isEmptyMsg(message) || isQuitMsg(message)) {
                     clients.remove(socket, name);
+                    clientSockets.remove(socket);
                     break;
                 }
                 System.out.printf("Получено от клиента %s: %s%n", socket.getPort(), message);
 
                 if (message.contains("/name ")) {
-                    changeName(message, socket, writer);
+                    changeName(message, socket, writer, clients);
                 } else if (message.contains("/list")) {
-                    getUsersList(writer);
+                    getUsersList(writer, clients);
                 } else if (message.contains("/whisper ")) {
-                    privateMessage(message, socket, writer);
+                    privateMessage(message, socket, writer, clients);
                 } else {
-
-                    for (var c : clients.keySet()) {
-                        if (c != socket) { // && !socket.isClosed()
-                            sendResponse(clients.get(socket) + ": " + message.toUpperCase(), getWriter(c));  //message
+                    for (var c : clientSockets) {
+                        if (c != socket) {
+                            sendResponse(clients.get(socket) + ": " + message, getWriter(c));  //message
                         }
                     }
                 }
             }
         } catch (NoSuchElementException e) {
             System.out.println("Клиент закрыл соединение!");
+            clientSockets.remove(socket);
             clients.remove(socket, name);
         } catch (IOException ex) {
             ex.printStackTrace();
             System.out.printf("Клиент отключен: %s%n", socket);
+            clientSockets.remove(socket);
             clients.remove(socket, name);
         }
     }
 
     private static PrintWriter getWriter(Socket socket) throws IOException {
-//        if (socket.isClosed()) clients.remove(socket, name);
         OutputStream stream = socket.getOutputStream();
-//        stream.flush();
         return new PrintWriter(stream);
     }
 
@@ -82,52 +78,45 @@ public class EchoServerService {
         writer.flush();
     }
 
-    private static void changeName(String message, Socket socket, Writer writer) throws IOException {
+    private static void changeName(String message, Socket socket, Writer writer, HashMap<Socket, String> clients) throws IOException {
         String newName = message.replace("/name ", "");
-
         for (var c : clients.values()) {
-            if (c.equalsIgnoreCase(newName.replaceAll(" ", ""))) {
-                sendResponse("Не удалось сменить имя", writer);
+            if (c.equalsIgnoreCase(newName.replaceAll("\\s", ""))) {
+                sendResponse("Не удалось сменить имя, пользователь с таким именем уже существует", writer);
                 return;
             }
         }
-        sendResponse("Вы теперь известны как " + newName, writer);
-        for (var s : clients.keySet()) {
-            if (s != socket) { // && !socket.isClosed()
-                sendResponse("Пользователь " + clients.get(socket) + " теперь известен как " + newName, getWriter(s));
+        if (newName.matches("^[a-zA-Z0-9]{3,12}$")) {
+            sendResponse("Вы теперь известны как " + newName, writer);
+            for (var s : clients.keySet()) {
+                if (s != socket) {
+                    sendResponse("Пользователь " + clients.get(socket) + " теперь известен как " + newName, getWriter(s));
+                }
             }
+            clients.put(socket, newName);
+        } else {
+            sendResponse("Имя может содержать только буквы и цифры (от 3 до 12 символов).", writer);
         }
-        clients.put(socket, newName);
     }
 
-    private static void getUsersList(Writer writer) throws IOException {
-        sendResponse(String.valueOf(clients.values()).replace("[","").replace("]",""), writer);
+    private static void getUsersList(Writer writer, HashMap<Socket, String> clients) throws IOException {
+        sendResponse(String.valueOf(clients.values()).replace("[", "").replace("]", ""), writer);
     }
 
-    private static void privateMessage(String message, Socket socket, Writer writer) throws IOException {
+    private static void privateMessage(String message, Socket socket, Writer writer, HashMap<Socket, String> clients) throws IOException {
+        String msg = message.replace("/whisper ", "");
         for (var c : clients.values()) {
-            if (message.contains(c)) {
-                String msg = message.replace("/whisper ","").replace(c+" ", "");
-
-                for(var s: clients.entrySet()){
-                    if(c.equals(s.getValue())){
-                        Socket key = s.getKey();
-                        sendResponse(clients.get(socket) + ": " + msg, getWriter(key));
-                        break; //breaking because its one to one map
+            if (msg.contains(c)) {
+                String msg1 = msg.replace(c + " ", "");
+                for (var s : clients.entrySet()) {
+                    Socket key = s.getKey();
+                    if (c.equals(s.getValue())) {
+                        sendResponse(clients.get(socket) + ": " + msg1, getWriter(key));
+                        break;
                     }
                 }
-
-//                for (var s: clients.keySet()) {
-//                    if(s != socket)
-//                }
             }
         }
     }
-
-//    public static String reverseString(String str) {
-//        StringBuilder sb = new StringBuilder(str);
-//        sb.reverse();
-//        return sb.toString();
-//    }
 
 }
